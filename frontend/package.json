@@ -20,6 +20,7 @@
         "@playwright/test": "^1.45.0",
         "@bytecodealliance/jco": "^1.15.4",
         "@sveltejs/adapter-auto": "^3.0.0",
+        "@sveltejs/adapter-cloudflare": "^4.0.0",
         "@sveltejs/kit": "^2.0.0",
         "@sveltejs/vite-plugin-svelte": "^4.0.0",
         "@testing-library/svelte": "^5.0.0",
