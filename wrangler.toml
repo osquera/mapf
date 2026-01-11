@@ -1,0 +1,4 @@
+name = "mapf-arena"
+compatibility_date = "2026-01-11"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "frontend/.svelte-kit/cloudflare"

@@ -12,6 +12,11 @@ export default defineConfig({
 	optimizeDeps: {
 		exclude: ['@bytecodealliance/jco']
 	},
+	build: {
+		rollupOptions: {
+			external: ['node:fs', 'node:crypto', 'fs', 'crypto', 'path', 'node:path']
+		}
+	},
 	test: {
 		include: ['src/**/*.{test,spec}.{js,ts}'],
 		environment: 'jsdom'
