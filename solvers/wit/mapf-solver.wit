@@ -1,0 +1,72 @@
+/// MAPF Solver Interface (WIT Component Model)
+///
+/// This defines the contract that all uploaded MAPF solvers must implement.
+/// Both browser (via jco) and server (via wasmtime) use this interface.
+
+package mapf:solver@0.1.0;
+
+/// Core types for MAPF problems and solutions.
+interface types {
+    /// A 2D coordinate on the grid.
+    record coordinate {
+        x: u32,
+        y: u32,
+    }
+
+    /// A path is a sequence of coordinates (including start and goal).
+    record path {
+        /// Ordered list of coordinates from start to goal.
+        steps: list<coordinate>,
+    }
+
+    /// Result of solving a MAPF instance.
+    record solution {
+        /// One path per agent, in the same order as the input.
+        paths: list<path>,
+        /// Total cost (sum of path lengths or makespan, depending on metric).
+        cost: u64,
+    }
+
+    /// Statistics from a solver run.
+    record stats {
+        /// Nodes expanded during search.
+        nodes-expanded: u64,
+        /// Time spent in microseconds.
+        time-us: u64,
+    }
+}
+
+/// The solver interface that WASM modules must export.
+interface solver {
+    use types.{coordinate, solution, stats};
+
+    /// Solve a MAPF instance.
+    ///
+    /// Arguments:
+    /// - `map-data`: Flat byte array (row-major). 1 = passable, 0 = blocked.
+    /// - `width`: Map width.
+    /// - `height`: Map height.
+    /// - `starts`: Start position for each agent.
+    /// - `goals`: Goal position for each agent.
+    ///
+    /// Returns a solution or an error message.
+    solve: func(
+        map-data: list<u8>,
+        width: u32,
+        height: u32,
+        starts: list<coordinate>,
+        goals: list<coordinate>,
+    ) -> result<solution, string>;
+
+    /// Get statistics from the last solve call.
+    /// Returns None if solve hasn't been called.
+    get-stats: func() -> option<stats>;
+
+    /// Solver name and version for display.
+    info: func() -> string;
+}
+
+/// World that solvers export.
+world mapf-solver {
+    export solver;
+}

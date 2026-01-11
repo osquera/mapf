@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "@bytecodealliance/jco": "^1.15.4"
+  }
+}

@@ -1,0 +1,176 @@
+# https://taskfile.dev - Install: `go install github.com/go-task/task/v3/cmd/task@latest`
+# Or on Windows: `winget install Task.Task` / `scoop install task`
+
+version: '3'
+
+vars:
+  FRONTEND_DIR: ./frontend
+  SOLVERS_DIR: ./solvers
+
+tasks:
+  # ============ Development ============
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  dev:
+    desc: Start frontend dev server
+    dir: '{{.FRONTEND_DIR}}'
+    deps: [prepare:maps]
+    cmds:
+      - npm run dev
+
+  # ============ Testing ============
+  test:
+    desc: Run all tests (Rust + Frontend)
+    cmds:
+      - task: test:rust
+      - task: test:frontend
+
+  test:rust:
+    desc: Run Rust tests
+    cmds:
+      - cargo test --workspace
+
+  test:frontend:
+    desc: Run all frontend tests (unit + e2e)
+    cmds:
+      - task: test:unit
+      - task: test:e2e
+
+  test:unit:
+    desc: Run frontend unit tests (Vitest)
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm run test:unit
+
+  test:unit:watch:
+    desc: Run frontend unit tests in watch mode
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm run test:unit -- --watch
+
+  test:e2e:
+    desc: Run frontend E2E tests (Playwright)
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npx playwright test
+
+  test:e2e:ui:
+    desc: Run E2E tests with Playwright UI
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npx playwright test --ui
+
+  test:e2e:debug:
+    desc: Run E2E tests in debug mode
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npx playwright test --debug
+
+  # ============ Type Checking & Linting ============
+  check:
+    desc: Run all checks (types, lint)
+    cmds:
+      - task: check:types
+      - task: check:rust
+
+  check:types:
+    desc: Check TypeScript/Svelte types
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npx svelte-check --tsconfig ./tsconfig.json
+
+  check:rust:
+    desc: Check Rust code
+    cmds:
+      - cargo check --workspace
+      - cargo clippy --workspace
+
+  # ============ Building ============
+  build:
+    desc: Build everything
+    cmds:
+      - task: build:wasm
+      - task: build:frontend
+
+  build:wasm:
+    desc: Build WASM solver
+    dir: '{{.SOLVERS_DIR}}/mapf-astar'
+    cmds:
+      - wasm-pack build --target web --out-dir ../../frontend/src/lib/wasm/mapf-astar
+      # Copy to static for runtime loading
+      - cmd: cp ../../frontend/src/lib/wasm/mapf-astar/mapf_astar_bg.wasm ../../frontend/static/wasm/
+        platforms: [linux, darwin]
+      - cmd: powershell -Command "Copy-Item '../../frontend/src/lib/wasm/mapf-astar/mapf_astar_bg.wasm' -Destination '../../frontend/static/wasm/'"
+        platforms: [windows]
+      - cmd: cp ../../frontend/src/lib/wasm/mapf-astar/mapf_astar.js ../../frontend/static/wasm/
+        platforms: [linux, darwin]
+      - cmd: powershell -Command "Copy-Item '../../frontend/src/lib/wasm/mapf-astar/mapf_astar.js' -Destination '../../frontend/static/wasm/'"
+        platforms: [windows]
+
+  build:test-component:
+    desc: Build the test component solver (requires wasm32-unknown-unknown target)
+    dir: '{{.SOLVERS_DIR}}/mapf-test-component'
+    cmds:
+      - cargo build --target wasm32-unknown-unknown
+      # Embed WIT and convert to component
+      # Note: This uses 'jco' from frontend node_modules
+      - npx jco embed ../../target/wasm32-unknown-unknown/debug/mapf_test_component.wasm --wit ../wit/mapf-solver.wit -o embedded.wasm
+      - npx jco new embedded.wasm -o component.wasm
+      # Copy to static for easy testing
+      - cmd: cp component.wasm ../../frontend/static/test-solver.wasm
+        platforms: [linux, darwin]
+      - cmd: powershell -Command "Copy-Item 'component.wasm' -Destination '../../frontend/static/test-solver.wasm'"
+        platforms: [windows]
+
+  build:frontend:
+    desc: Build frontend for production
+    dir: '{{.FRONTEND_DIR}}'
+    deps: [prepare:maps]
+    cmds:
+      - npm run build
+
+  prepare:maps:
+    desc: Copy maps to static folder and generate index
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - node scripts/prepare-maps.js
+
+  # ============ Setup ============
+  setup:
+    desc: Install all dependencies
+    cmds:
+      - task: setup:frontend
+      - task: setup:playwright
+
+  setup:frontend:
+    desc: Install frontend npm dependencies
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm install
+
+  setup:playwright:
+    desc: Install Playwright browsers
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npx playwright install chromium
+
+  # ============ Cleaning ============
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - cargo clean
+      - cmd: rm -rf {{.FRONTEND_DIR}}/build {{.FRONTEND_DIR}}/.svelte-kit
+        platforms: [linux, darwin]
+      - cmd: if exist {{.FRONTEND_DIR}}\build rmdir /s /q {{.FRONTEND_DIR}}\build
+        platforms: [windows]
+
+  # ============ CI ============
+  ci:
+    desc: Run CI pipeline locally
+    cmds:
+      - task: check
+      - task: test
+      - task: build

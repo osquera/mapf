@@ -1,0 +1,25 @@
+# Package Managers
+node_modules
+
+# Build
+.svelte-kit
+build
+dist
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Test artifacts
+coverage
+playwright-report
+test-results

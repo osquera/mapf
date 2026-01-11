@@ -1,3 +1,41 @@
+# Rust
+/target/
+
+# WASM build artifacts
+solvers/*/pkg/
+
+# Node
+node_modules/
+.npm
+
+# Frontend build
+frontend/.svelte-kit/
+frontend/build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Python (legacy)
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -14,7 +52,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/

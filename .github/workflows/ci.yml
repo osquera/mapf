@@ -1,0 +1,140 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Rust: native tests
+    # ─────────────────────────────────────────────────────────────────────────────
+    rust-test:
+        name: Rust Tests
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-action@stable
+
+            - name: Cache cargo
+              uses: Swatinem/rust-cache@v2
+
+            - name: Run tests
+              run: cargo test --workspace --all-features
+
+            - name: Check formatting
+              run: cargo fmt --all -- --check
+
+            - name: Clippy
+              run: cargo clippy --workspace --all-features -- -D warnings
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Rust: WASM build
+    # ─────────────────────────────────────────────────────────────────────────────
+    rust-wasm:
+        name: Rust WASM Build
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-action@stable
+              with:
+                  targets: wasm32-unknown-unknown
+
+            - name: Install wasm-pack
+              run: cargo install wasm-pack
+
+            - name: Cache cargo
+              uses: Swatinem/rust-cache@v2
+
+            - name: Build WASM (mapf-core)
+              run: wasm-pack build solvers/mapf-core --target web
+
+            - name: Build WASM (mapf-astar)
+              run: wasm-pack build solvers/mapf-astar --target web
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Frontend: lint + unit tests
+    # ─────────────────────────────────────────────────────────────────────────────
+    frontend-test:
+        name: Frontend Tests
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: frontend
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  cache: "npm"
+                  cache-dependency-path: frontend/package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Lint
+              run: npm run lint
+
+            - name: Type check
+              run: npm run check
+
+            - name: Unit tests
+              run: npm run test:unit
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Frontend: E2E tests (Playwright)
+    # ─────────────────────────────────────────────────────────────────────────────
+    frontend-e2e:
+        name: Frontend E2E
+        runs-on: ubuntu-latest
+        needs: [rust-wasm] # needs WASM artifacts
+        defaults:
+            run:
+                working-directory: frontend
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  cache: "npm"
+                  cache-dependency-path: frontend/package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Install Playwright browsers
+              run: npx playwright install --with-deps chromium
+
+            - name: Run E2E tests
+              run: npm run test:e2e
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Integration: benchmark smoke test
+    # ─────────────────────────────────────────────────────────────────────────────
+    benchmark-smoke:
+        name: Benchmark Smoke Test
+        runs-on: ubuntu-latest
+        needs: [rust-test]
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-action@stable
+
+            - name: Cache cargo
+              uses: Swatinem/rust-cache@v2
+
+            - name: Run benchmark fixtures
+              run: cargo test --package mapf-astar --test astar_tests -- --nocapture

@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = [
+    "solvers/mapf-core",
+    "solvers/mapf-astar",
+    "solvers/mapf-test-component",
+]
