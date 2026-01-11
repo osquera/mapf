@@ -100,6 +100,11 @@ tasks:
     dir: '{{.SOLVERS_DIR}}/mapf-astar'
     cmds:
       - wasm-pack build --target web --out-dir ../../frontend/src/lib/wasm/mapf-astar
+      # Ensure static/wasm directory exists
+      - cmd: mkdir -p ../../frontend/static/wasm/
+        platforms: [linux, darwin]
+      - cmd: powershell -Command "New-Item -ItemType Directory -Path '../../frontend/static/wasm/' -Force | Out-Null"
+        platforms: [windows]
       # Copy to static for runtime loading
       - cmd: cp ../../frontend/src/lib/wasm/mapf-astar/mapf_astar_bg.wasm ../../frontend/static/wasm/
         platforms: [linux, darwin]
