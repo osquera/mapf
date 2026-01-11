@@ -71,23 +71,23 @@
             </li>
             <li>
                 <strong>Add Dependencies</strong>: In <code>Cargo.toml</code>, add:
-                <pre><code>[dependencies]
-wit-bindgen = "0.36.0"</code></pre>
+                <pre>[dependencies]
+wit-bindgen = "0.36.0"</pre>
             </li>
             <li>
                 <strong>Implement Interface</strong>: Use <code>wit_bindgen::generate!</code> to reference the WIT file and implement the <code>Guest</code> trait.
             </li>
             <li>
                 <strong>Build Core WASM</strong>:
-                <pre><code>cargo build --target wasm32-unknown-unknown --release</code></pre>
+                <pre>cargo build --target wasm32-unknown-unknown --release</pre>
             </li>
             <li>
                 <strong>Componentize</strong>: Convert the core WASM to a Component. You can use <a href="https://github.com/bytecodealliance/jco">jco</a> or <code>wasm-tools</code>.
-                <pre><code># Embed the WIT interface
+                <pre># Embed the WIT interface
 jco embed wit/mapf-solver.wit target/wasm32-unknown-unknown/release/my_solver.wasm -o embedded.wasm
 
 # Create the component
-jco new embedded.wasm -o my-solver-component.wasm</code></pre>
+jco new embedded.wasm -o my-solver-component.wasm</pre>
             </li>
             <li>
                 <strong>Upload</strong>: Upload the resulting <code>my-solver-component.wasm</code> file to the Arena.
