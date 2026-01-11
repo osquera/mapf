@@ -1,4 +1,4 @@
-import { transpile } from '@bytecodealliance/jco';
+import { browser } from '$app/environment';
 
 export interface TranspiledComponent {
     jsUrl: string;
@@ -11,6 +11,12 @@ export interface TranspiledComponent {
  * @param buffer The raw bytes of the .wasm component
  */
 export async function transpileComponent(buffer: ArrayBuffer): Promise<TranspiledComponent> {
+    if (!browser) {
+        throw new Error('transpileComponent cannot be called on the server');
+    }
+
+    const { transpile } = await import('@bytecodealliance/jco');
+        
     const name = 'component';
     
     // Transpile the component
