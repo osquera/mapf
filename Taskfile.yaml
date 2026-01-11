@@ -135,6 +135,7 @@ tasks:
     dir: '{{.FRONTEND_DIR}}'
     deps: [prepare:maps]
     cmds:
+      - npm ci
       - npm run build
 
   prepare:maps:
