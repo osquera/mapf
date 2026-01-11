@@ -1,5 +1,3 @@
-import { browser } from '$app/environment';
-
 export interface TranspiledComponent {
     jsUrl: string;
     /** The core WASM blob URL, baked into the JS but returned here for reference/cleanup */
@@ -11,7 +9,7 @@ export interface TranspiledComponent {
  * @param buffer The raw bytes of the .wasm component
  */
 export async function transpileComponent(buffer: ArrayBuffer): Promise<TranspiledComponent> {
-    if (!browser) {
+    if (import.meta.env.SSR) {
         throw new Error('transpileComponent cannot be called on the server');
     }
 
