@@ -3,6 +3,7 @@
 	import MapViewer from '$lib/components/MapViewer.svelte';
 	import { parseMap, parseScenario } from '$lib/parser';
 	import { SolverRunner } from '$lib/solver';
+	import { backendClient, type VerifyResponse } from '$lib/api';
 	import type { GridMap, Scenario, Path, Coordinate, SolverResult } from '$lib/types';
 
 	let map: GridMap | null = $state(null);
@@ -16,6 +17,12 @@
 	let solverReady: boolean = $state(false);
 	let solving: boolean = $state(false);
 	let solverResult: SolverResult | null = $state(null);
+
+	// Backend verification state
+	let backendAvailable: boolean = $state(false);
+	let verifyingOnBackend: boolean = $state(false);
+	let backendResult: VerifyResponse | null = $state(null);
+	let currentWasmBytes: Uint8Array | null = $state(null);
 
 	// Map selection state
 	let sourceMode: 'upload' | 'select' = $state('select');
@@ -114,6 +121,11 @@ map
 	onMount(async () => {
 		loadSampleMap();
 		initSolver();
+		
+		// Check backend availability
+		backendAvailable = await backendClient.healthCheck();
+		console.log('Backend available:', backendAvailable);
+		
 		try {
 			const res = await fetch('/maps/index.json');
 			if (res.ok) {
@@ -205,49 +217,111 @@ map
 			const buffer = await file.arrayBuffer();
 			console.log(`Buffer read: ${buffer.byteLength} bytes`);
 			
-			runner = new SolverRunner();
-			console.log(' initializing component...');
-			const info = await runner.initComponent(buffer);
+			// Save WASM bytes for backend verification
+			currentWasmBytes = new Uint8Array(buffer);
 			
-			console.log('Component initialized:', info);
-			solverName = info;
-			solverReady = true;
+			// Custom WASM can only run on backend (Cloudflare doesn't support JCO)
+			if (!backendAvailable) {
+				throw new Error(
+					'Backend server is not available. Custom WASM solvers require backend verification. ' +
+					'Please start the backend server or use the built-in solver.'
+				);
+			}
+			
+			// Set custom mode without browser initialization
 			solverMode = 'custom';
+			solverName = file.name.replace('.wasm', '');
+			solverReady = true;
+			
+			console.log(`Custom solver "${solverName}" ready for backend verification`);
 		} catch (e) {
 			console.error('Upload failed:', e);
 			error = `Failed to load custom solver: ${e instanceof Error ? e.message : String(e)}`;
-			solverMode = 'builtin'; // Fallback
-			initSolver();
+			currentWasmBytes = null;
 		}
 	}
 
 	async function runSolver() {
-		if (!runner || !map || agents.length === 0) return;
+		if (!map || agents.length === 0) return;
 
 		solving = true;
 		solverResult = null;
+		backendResult = null;
 		paths = [];
 		error = null;
 
+		const starts = agents.map((a) => a.start);
+		const goals = agents.map((a) => a.goal);
+
 		try {
-			const starts = agents.map((a) => a.start);
-			const goals = agents.map((a) => a.goal);
+			// Custom WASM: Skip browser, run on backend only
+			if (solverMode === 'custom' && currentWasmBytes) {
+				if (!backendAvailable) {
+					throw new Error('Backend server required for custom WASM solvers');
+				}
+				
+				console.log('Running custom solver on backend only...');
+				await verifyOnBackend(starts, goals);
+				
+				// Display backend results as paths
+				if (backendResult?.valid && backendResult.solution?.paths) {
+					paths = backendResult.solution.paths;
+				}
+			}
+			// Built-in solver: Run browser smoke test first
+			else if (runner) {
+				const result = await runner.solve(map, starts, goals, {
+					algorithm: selectedAlgorithm,
+					heuristic: selectedHeuristic
+				});
+				solverResult = result;
 
-			const result = await runner.solve(map, starts, goals, {
-				algorithm: selectedAlgorithm,
-				heuristic: selectedHeuristic
-			});
-			solverResult = result;
-
-			if (result.status === 'success' && result.solution?.paths) {
-				paths = result.solution.paths;
-			} else if (result.error) {
-				error = result.error;
+				if (result.status === 'success' && result.solution?.paths) {
+					paths = result.solution.paths;
+					
+					// If backend is available, also verify on server
+					if (backendAvailable && !verifyingOnBackend) {
+						verifyOnBackend(starts, goals);
+					}
+				} else if (result.error) {
+					error = result.error;
+				}
+			} else {
+				throw new Error('No solver initialized');
 			}
 		} catch (e) {
 			error = `Solver error: ${e instanceof Error ? e.message : String(e)}`;
 		} finally {
 			solving = false;
+		}
+	}
+
+	async function verifyOnBackend(starts: Coordinate[], goals: Coordinate[]) {
+		if (!currentWasmBytes || !map) return;
+		
+		verifyingOnBackend = true;
+		backendResult = null;
+
+		try {
+			console.log('Verifying on backend...');
+			const result = await backendClient.verify({
+				wasmBytes: currentWasmBytes,
+				map: {
+					width: map.width,
+					height: map.height,
+					tiles: Array.from(map.tiles)
+				},
+				starts,
+				goals
+			});
+			
+			backendResult = result;
+			console.log('Backend verification result:', result);
+		} catch (e) {
+			console.error('Backend verification failed:', e);
+			// Don't set error state - backend verification is optional
+		} finally {
+			verifyingOnBackend = false;
 		}
 	}
 </script>
@@ -392,7 +466,7 @@ map
 			{/if}
 
 			{#if solverResult}
-				<h3>Results</h3>
+				<h3>Browser Smoke Test</h3>
 				<p class:success={solverResult.status === 'success'} class:failure={solverResult.status !== 'success'}>
 					{solverResult.status === 'success' ? '✅ Solution found' : solverResult.status === 'timeout' ? '⏱️ Timeout' : '❌ No solution'}
 				</p>
@@ -406,6 +480,40 @@ map
 					{#each solverResult.solution.paths as path, i}
 						<p class="path-info">Agent {i + 1}: {path.steps.length} steps</p>
 					{/each}
+				{/if}
+			{/if}
+			
+			{#if backendAvailable && currentWasmBytes}
+				<h3>Backend Verification</h3>
+				{#if verifyingOnBackend}
+					<p class="verifying">🔄 Verifying on server...</p>
+				{:else if backendResult}
+					<p class:success={backendResult.valid} class:failure={!backendResult.valid}>
+						{backendResult.valid ? '✅ Server verified' : '❌ Invalid solution'}
+					</p>
+					{#if backendResult.stats.instruction_count}
+						<p><strong>Instructions:</strong> {backendResult.stats.instruction_count.toLocaleString()}</p>
+					{/if}
+					<p>Server time: {backendResult.stats.execution_time_ms} ms</p>
+					{#if backendResult.stats.cost}
+						<p>Cost: {backendResult.stats.cost}</p>
+					{/if}
+					{#if backendResult.stats.makespan}
+						<p>Makespan: {backendResult.stats.makespan}</p>
+					{/if}
+					{#if backendResult.error}
+						<p class="error">Error: {backendResult.error}</p>
+					{/if}
+					{#if backendResult.validation_errors.length > 0}
+						<details>
+							<summary>Validation errors ({backendResult.validation_errors.length})</summary>
+							<ul class="validation-errors">
+								{#each backendResult.validation_errors as err}
+									<li>{err.details}</li>
+								{/each}
+							</ul>
+						</details>
+					{/if}
 				{/if}
 			{/if}
 		</div>
@@ -516,9 +624,40 @@ map
 		color: #f44336;
 	}
 
+	.info p.verifying {
+		color: #4fc3f7;
+		font-style: italic;
+	}
+
+	.info p.error {
+		color: #ff6b6b;
+		font-size: 0.9rem;
+	}
+
 	.path-info {
 		font-size: 0.85rem;
 		margin-left: 0.5rem;
+	}
+
+	.validation-errors {
+		margin-top: 0.5rem;
+		padding-left: 1.5rem;
+		color: #ff6b6b;
+		font-size: 0.85rem;
+	}
+
+	.validation-errors li {
+		margin: 0.25rem 0;
+	}
+
+	details {
+		margin-top: 0.5rem;
+		cursor: pointer;
+	}
+
+	summary {
+		color: #ff6b6b;
+		font-size: 0.9rem;
 	}
 
 	.solver-upload {

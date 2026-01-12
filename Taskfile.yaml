@@ -6,6 +6,7 @@ version: '3'
 vars:
   FRONTEND_DIR: ./frontend
   SOLVERS_DIR: ./solvers
+  BACKEND_DIR: ./backend
 
 tasks:
   # ============ Development ============
@@ -20,6 +21,18 @@ tasks:
     deps: [prepare:maps]
     cmds:
       - npm run dev
+
+  dev:backend:
+    desc: Start backend dev server
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - cargo run
+
+  dev:fullstack:
+    desc: Start both frontend and backend (parallel)
+    cmds:
+      - task: dev:backend &
+      - task: dev
 
   # ============ Testing ============
   test:
@@ -81,7 +94,14 @@ tasks:
     dir: '{{.FRONTEND_DIR}}'
     cmds:
       - npx svelte-check --tsconfig ./tsconfig.json
+backend
+      - task: build:frontend
 
+  build:backend:
+    desc: Build backend for production
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - cargo build --release
   check:rust:
     desc: Check Rust code
     cmds:
@@ -142,7 +162,20 @@ tasks:
     desc: Copy maps to static folder and generate index
     dir: '{{.FRONTEND_DIR}}'
     cmds:
-      - node scripts/prepare-maps.js
+      - node scripts/prepare-m
+      - task: setup:backend
+
+  setup:backend:
+    desc: Setup backend environment
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - cmd: cp .env.example .env
+        platforms: [linux, darwin]
+        ignore_error: true
+      - cmd: if not exist .env copy .env.example .env
+        platforms: [windows]
+        ignore_error: true
+      - echo "Backend setup complete. Edit backend/.env with your database credentials."aps.js
 
   # ============ Setup ============
   setup:
@@ -167,6 +200,32 @@ tasks:
   clean:
     desc: Clean build artifacts
     cmds:
+
+  # ============ Database ============
+  db:migrate:
+    desc: Run database migrations
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - cargo sqlx migrate run
+
+  db:create:
+    desc: Create database
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - cargo sqlx database create
+
+  # ============ Docker/Deployment ============
+  docker:build:
+    desc: Build backend Docker image
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - docker build -t mapf-server:latest .
+
+  docker:run:
+    desc: Run backend with docker-compose
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - docker-compose up -d
       - cargo clean
       - cmd: rm -rf {{.FRONTEND_DIR}}/build {{.FRONTEND_DIR}}/.svelte-kit
         platforms: [linux, darwin]

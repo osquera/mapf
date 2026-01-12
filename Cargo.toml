@@ -4,4 +4,5 @@ members = [
     "solvers/mapf-core",
     "solvers/mapf-astar",
     "solvers/mapf-test-component",
+    "backend",
 ]

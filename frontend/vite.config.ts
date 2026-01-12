@@ -9,9 +9,7 @@ export default defineConfig({
 			allow: ['..']
 		}
 	},
-	optimizeDeps: {
-		exclude: ['@bytecodealliance/jco']
-	},
+
 	build: {
 		rollupOptions: {
 			external: ['node:fs', 'node:crypto', 'fs', 'crypto', 'path', 'node:path']

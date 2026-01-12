@@ -27,12 +27,10 @@
         </p>
         <ol>
             <li>
-                <strong>Legacy (Bindgen)</strong>: Uses `wasm-bindgen` to generate a JS/WASM pair. 
-                This is used for the built-in solver.
+                <strong>Built-in Solver (wasm-bindgen)</strong>: The reference A* implementation runs in the browser using wasm-bindgen.
             </li>
             <li>
-                <strong>Component Model (Option 2)</strong>: Uses the WASM Component Model (`.wasm` single file).
-                These are transpiled on-the-fly in the browser using <code>@bytecodealliance/jco</code>.
+                <strong>Custom Solvers (Component Model)</strong>: User-uploaded WASM Components (.wasm files) are verified on the backend server using Wasmtime. Custom solvers cannot run in the browser on Cloudflare Pages.
             </li>
         </ol>
     </section>
@@ -83,14 +81,16 @@ wit-bindgen = "0.36.0"</pre>
             </li>
             <li>
                 <strong>Componentize</strong>: Convert the core WASM to a Component. You can use <a href="https://github.com/bytecodealliance/jco">jco</a> or <code>wasm-tools</code>.
-                <pre># Embed the WIT interface
-jco embed wit/mapf-solver.wit target/wasm32-unknown-unknown/release/my_solver.wasm -o embedded.wasm
+                <pre># Using jco componentize
+npx jco componentize target/wasm32-unknown-unknown/release/my_solver.wasm \
+    -w wit/mapf-solver.wit -o my-solver-component.wasm
 
-# Create the component
-jco new embedded.wasm -o my-solver-component.wasm</pre>
+# Or using wasm-tools
+wasm-tools component new target/wasm32-unknown-unknown/release/my_solver.wasm \
+    -o my-solver-component.wasm</pre>
             </li>
             <li>
-                <strong>Upload</strong>: Upload the resulting <code>my-solver-component.wasm</code> file to the Arena.
+                <strong>Upload</strong>: Upload the resulting <code>my-solver-component.wasm</code> file to the Arena. Custom solvers run on the backend server (not in browser) and provide deterministic instruction counting.
             </li>
         </ol>
     </section>
@@ -108,7 +108,7 @@ jco new embedded.wasm -o my-solver-component.wasm</pre>
             </div>
             <div class="todo-item done">
                 <input type="checkbox" checked disabled />
-                <span>Custom WASM Component Upload & JCO Transpilation</span>
+                <span>Backend Server Verification with Wasmtime</span>
             </div>
             <div class="todo-item">
                 <input type="checkbox" disabled />

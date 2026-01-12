@@ -2,7 +2,6 @@
 
 import type { GridMap, Coordinate, Path, Solution, SolverResult, SolverStats } from '$lib/types';
 import { validateSolution, type ValidationResult } from '$lib/validation';
-import { transpileComponent } from './jco-loader';
 
 export interface SolverRunnerConfig {
 	/** Timeout in milliseconds (default: 30000) */
@@ -103,52 +102,16 @@ export class SolverRunner {
 
 	/**
 	 * Initialize the solver with a custom WASM component (user upload).
-	 * Uses JCO to transpile the component for browser execution.
+	 * Custom WASM components are no longer supported in the browser on Cloudflare.
+	 * Users should upload WASM to the backend API for verification instead.
 	 * @param wasmBuffer Raw bytes of the .wasm component
 	 */
 	async initComponent(wasmBuffer: ArrayBuffer): Promise<string> {
-		this.terminate(); 
-
-		try {
-			this.worker = new Worker(new URL('./solver.worker.ts', import.meta.url), {
-				type: 'module'
-			});
-
-			// Setup event handlers same as init()
-			this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
-				const { id, success, data, error } = event.data;
-				const pending = this.pendingRequests.get(id);
-				if (pending) {
-					this.pendingRequests.delete(id);
-					if (success) {
-						pending.resolve(event.data);
-					} else {
-						pending.reject(new Error(error ?? 'Unknown error'));
-					}
-				}
-			};
-
-			this.worker.onerror = (event) => {
-				console.error('Worker error:', event);
-				for (const [id, pending] of this.pendingRequests) {
-					pending.reject(new Error('Worker error: ' + event.message));
-					this.pendingRequests.delete(id);
-				}
-			};
-
-			// Transpile the component
-			const { jsUrl, wasmUrl } = await transpileComponent(wasmBuffer);
-
-			const response = await this.sendRequest('init', {
-				mode: 'component',
-				jsUrl,
-				wasmUrl
-			});
-			return response.data?.info ?? 'Unknown Component Solver';
-		} catch (e) {
-			this.terminate();
-			throw e;
-		}
+		throw new Error(
+			'Custom WASM solvers cannot run in the browser on Cloudflare Pages. ' +
+			'Please use the backend verification API to test your solver. ' +
+			'The backend provides deterministic instruction counting and full WASM Component Model support.'
+		);
 	}
 
 	/**
