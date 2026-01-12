@@ -1,6 +1,3 @@
-# https://taskfile.dev - Install: `go install github.com/go-task/task/v3/cmd/task@latest`
-# Or on Windows: `winget install Task.Task` / `scoop install task`
-
 version: '3'
 
 vars:
@@ -94,14 +91,7 @@ tasks:
     dir: '{{.FRONTEND_DIR}}'
     cmds:
       - npx svelte-check --tsconfig ./tsconfig.json
-backend
-      - task: build:frontend
 
-  build:backend:
-    desc: Build backend for production
-    dir: '{{.BACKEND_DIR}}'
-    cmds:
-      - cargo build --release
   check:rust:
     desc: Check Rust code
     cmds:
@@ -109,11 +99,27 @@ backend
       - cargo clippy --workspace
 
   # ============ Building ============
+  
+  # 1. Main Build Task (For Local Dev / Full Stack)
   build:
-    desc: Build everything
+    desc: Build EVERYTHING (WASM + Frontend + Backend)
+    deps:
+      - task: build:wasm
+      - task: build:frontend
+      - task: build:backend
+
+  # 2. Cloudflare/Static Build Task (No Backend)
+  build:static:
+    desc: Build only Static Assets (WASM + Frontend) - Use this on Cloudflare!
     cmds:
       - task: build:wasm
       - task: build:frontend
+
+  build:backend:
+    desc: Build backend for production
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - cargo build --release
 
   build:wasm:
     desc: Build WASM solver
@@ -135,21 +141,6 @@ backend
       - cmd: powershell -Command "Copy-Item '../../frontend/src/lib/wasm/mapf-astar/mapf_astar.js' -Destination '../../frontend/static/wasm/'"
         platforms: [windows]
 
-  build:test-component:
-    desc: Build the test component solver (requires wasm32-unknown-unknown target)
-    dir: '{{.SOLVERS_DIR}}/mapf-test-component'
-    cmds:
-      - cargo build --target wasm32-unknown-unknown
-      # Embed WIT and convert to component
-      # Note: This uses 'jco' from frontend node_modules
-      - npx jco embed ../../target/wasm32-unknown-unknown/debug/mapf_test_component.wasm --wit ../wit/mapf-solver.wit -o embedded.wasm
-      - npx jco new embedded.wasm -o component.wasm
-      # Copy to static for easy testing
-      - cmd: cp component.wasm ../../frontend/static/test-solver.wasm
-        platforms: [linux, darwin]
-      - cmd: powershell -Command "Copy-Item 'component.wasm' -Destination '../../frontend/static/test-solver.wasm'"
-        platforms: [windows]
-
   build:frontend:
     desc: Build frontend for production
     dir: '{{.FRONTEND_DIR}}'
@@ -158,13 +149,15 @@ backend
       - npm ci
       - npm run build
 
+  # FIXED: Rejoined the split command line here
   prepare:maps:
     desc: Copy maps to static folder and generate index
     dir: '{{.FRONTEND_DIR}}'
     cmds:
-      - node scripts/prepare-m
+      - node scripts/prepare-maps.js
       - task: setup:backend
 
+  # FIXED: Removed the stray "aps.js" from the echo command
   setup:backend:
     desc: Setup backend environment
     dir: '{{.BACKEND_DIR}}'
@@ -175,7 +168,7 @@ backend
       - cmd: if not exist .env copy .env.example .env
         platforms: [windows]
         ignore_error: true
-      - echo "Backend setup complete. Edit backend/.env with your database credentials."aps.js
+      - echo "Backend setup complete. Edit backend/.env with your database credentials."
 
   # ============ Setup ============
   setup:
@@ -195,11 +188,6 @@ backend
     dir: '{{.FRONTEND_DIR}}'
     cmds:
       - npx playwright install chromium
-
-  # ============ Cleaning ============
-  clean:
-    desc: Clean build artifacts
-    cmds:
 
   # ============ Database ============
   db:migrate:
